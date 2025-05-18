@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mint DApp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+<script>
+window.onerror = function(message, source, lineno, colno, error) {
+  alert('全局错误: ' + message);
+  console.error('全局错误:', message, source, lineno, colno, error);
+};
+
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#3b82f6',
+        secondary: '#10b981',
+        dark: '#0f172a',
+        neon: '#00f5ff',
+        glass: 'rgba(255, 255, 255, 0.1)'
+      },
+      borderRadius: {
+        'none': '0px',
+        'sm': '2px',
+        DEFAULT: '4px',
+        'md': '8px',
+        'lg': '12px',
+        'xl': '16px',
+        '2xl': '20px',
+        '3xl': '24px',
+        'full': '9999px',
+        'button': '4px'
+      },
+      animation: {
+        'spin-slow': 'spin 6s linear infinite',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'float': 'float 3s ease-in-out infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        }
+      }
+    }
+  }
+}
+</script>
+<style>
+:root {
+  --vh: 1vh;
+}
+@keyframes particleMove {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(calc(-100 * var(--vh))) translateX(100px); opacity: 0; }
+}
+.particle {
+  position: absolute;
+  background: rgba(0, 245, 255, 0.5);
+  border-radius: 50%;
+  animation: particleMove linear infinite;
+  pointer-events: none;
+}
+.glass-card {
+  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.neon-text {
+  text-shadow: 0 0 5px #00f5ff, 0 0 10px #00f5ff;
+}
+.neon-border {
+  box-shadow: 0 0 10px #00f5ff, 0 0 20px #00f5ff;
+}
+.led-display {
+  font-family: 'Courier New', monospace;
+  color: #00f5ff;
+  text-shadow: 0 0 5px #00f5ff;
+}
+</style>
+</head>
+<body class="bg-dark text-white relative w-full min-h-screen">
+<!-- 粒子背景 -->
+<div id="particles" class="absolute inset-0 overflow-hidden pointer-events-none"></div>
+<!-- 顶部导航栏 -->
+<nav class="fixed top-0 left-0 right-0 z-50 bg-dark/90 backdrop-blur-md p-4 flex justify-between items-center border-b border-gray-800">
+  <div class="font-['Pacifico'] text-2xl text-white neon-text">MintDApp</div>
+  <button id="connectWallet" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-button neon-border">
+    连接钱包
+  </button>
+</nav>
+<!-- 主内容区域 -->
+<main class="pt-20 pb-24 px-4 flex-1" style="height: calc(100vh - 120px); overflow-y: auto;">
+  <!-- Mint 页面 -->
+  <div id="mintPage" class="space-y-6 pb-8">
+    <!-- 旋转Logo -->
+    <div class="flex justify-center">
+      <div class="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center animate-spin-slow neon-border">
+        <img src="https://ai-public.mastergo.com/ai/img_res/82a0b2c61388354358113dcdcb4475cc.jpg"
+             alt="Logo" class="w-24 h-24 object-contain animate-float">
+      </div>
+    </div>
+    <!-- Mint数量控制 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">Mint 数量</h2>
+      <div class="flex items-center justify-between">
+        <button id="decreaseBtn" class="w-10 h-10 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center justify-center neon-border">
+          <i class="fas fa-minus"></i>
+        </button>
+        <input id="mintAmount" type="text" inputmode="numeric" pattern="[0-9]*" value="1" class="w-24 text-center bg-transparent border-b border-neon text-white text-2xl focus:outline-none neon-text">
+        <button id="increaseBtn" class="w-10 h-10 bg-primary hover:bg-primary/90 text-white rounded-full flex items-center justify-center neon-border">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
+      <div class="mt-4 text-center text-sm text-gray-400">
+        Mint 金额范围: 10 USDT - 1000 USDT
+      </div>
+    </div>
+    <!-- Mint按钮 -->
+    <button id="mintNowBtn" class="w-full py-4 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-xl text-lg neon-border hover:opacity-90 transition">Mint Now</button>
+    </button>
+    <!-- Mint进度 -->
+    <div class="glass-card p-6 rounded-xl">
+      <div class="flex justify-between mb-2">
+        <span class="text-gray-300">进度</span>
+        <span id="progressPercent" class="text-neon">0%</span>
+      </div>
+      <div class="w-full bg-gray-800 rounded-full h-2.5">
+        <div id="progressBar" class="bg-gradient-to-r from-primary to-secondary h-2.5 rounded-full" style="width: 0%"></div>
+      </div>
+      <div class="flex justify-between mt-4">
+        <span class="text-gray-300">Mint USDT</span>
+        <span id="totalRaised" class="text-neon font-mono">0</span>
+      </div>
+    </div>
+    <!-- 我的数据 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">我的数据</h2>
+      <div class="space-y-4">
+        <div class="flex justify-between">
+          <span class="text-gray-300">我的 Mint 额</span>
+          <span id="myInvestment" class="text-neon font-mono">0</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-gray-300">我的 Mint 奖励</span>
+          <span id="myRewards" class="text-neon font-mono">0</span>
+        </div>
+      </div>
+    </div>
+    <!-- 邀请链接 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">邀请好友</h2>
+      <div class="flex items-center space-x-2">
+        <input id="inviteLink" type="text" value="请先连接钱包" readonly class="flex-1 bg-transparent border border-gray-700 text-white px-3 py-2 rounded-lg">
+        <button id="copyInviteBtn" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-button neon-border">
+          <i class="fas fa-copy"></i>
+        </button>
+      </div>
+      <div class="mt-4 flex justify-center">
+        <img src="https://ai-public.mastergo.com/ai/img_res/5868382d79091cdb532aa5c2692749af.jpg"
+             alt="QR Code" class="w-32 h-32 object-contain">
+      </div>
+    </div>
+  </div>
+  <!-- 数据页面 -->
+  <div id="dataPage" class="space-y-6 hidden pb-8">
+    <!-- 直推数据 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">直推数据</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-gray-400 mb-1">直推人数</div>
+          <div id="directReferrals" class="text-3xl led-display">0</div>
+        </div>
+        <div>
+          <div class="text-gray-400 mb-1">直推收益</div>
+          <div id="directEarnings" class="text-3xl led-display">0</div>
+        </div>
+      </div>
+    </div>
+    <!-- 间推数据 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">间推数据</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <div class="text-gray-400 mb-1">间推人数</div>
+          <div id="indirectReferrals" class="text-3xl led-display">0</div>
+        </div>
+        <div>
+          <div class="text-gray-400 mb-1">间推收益</div>
+          <div id="indirectEarnings" class="text-3xl led-display">0</div>
+        </div>
+      </div>
+    </div>
+    <!-- 数据图表 -->
+    <div class="glass-card p-6 rounded-xl">
+      <h2 class="text-xl font-semibold mb-4 neon-text">收益趋势</h2>
+      <img src="https://ai-public.mastergo.com/ai/img_res/fb9ae3e7c75b11e9f6d5b67d896ca695.jpg"
+           alt="Chart" class="w-full h-auto rounded-lg">
+    </div>
+  </div>
+</main>
+<!-- 底部导航栏 -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 bg-dark/90 backdrop-blur-md border-t border-gray-800">
+  <div class="grid grid-cols-2">
+    <button id="mintTab" class="py-4 flex flex-col items-center justify-center text-primary neon-text">
+      <i class="fas fa-coins text-xl mb-1"></i>
+      <span>Mint</span>
+    </button>
+    <button id="dataTab" class="py-4 flex flex-col items-center justify-center text-gray-400 hover:text-white transition">
+      <i class="fas fa-chart-line text-xl mb-1"></i>
+      <span>数据</span>
+    </button>
+  </div>
+</nav>
+<script>
+// ====== 全局变量 ======
+let web3, contract, usdt, currentAccount, referrerAddress;
+// ====== 合约配置 ======
+const contractABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "minAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokensPerShare",
+				"type": "uint256"
+			}
+		],
+		"name": "addTier",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "shareCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "referrer",
+				"type": "address"
+			}
+		],
+		"name": "invest",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_token",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_usdt",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_usdtReceiver",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "paramName",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newValue",
+				"type": "uint256"
+			}
+		],
+		"name": "ContractParamsUpdated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "referrer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "tokens",
+				"type": "uint256"
+			}
+		],
+		"name": "Invested",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "referrer",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "isDirect",
+				"type": "bool"
+			}
+		],
+		"name": "ReferralEarned",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "newPercent",
+				"type": "uint256"
+			}
+		],
+		"name": "setDirectReferralPercent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "newPercent",
+				"type": "uint256"
+			}
+		],
+		"name": "setIndirectReferralPercent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "newAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "setMaxInvestment",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "newAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "setMinInvestmentPerShare",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tierIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokensPerShare",
+				"type": "uint256"
+			}
+		],
+		"name": "setTierTokenReward",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newTokenAddress",
+				"type": "address"
+			}
+		],
+		"name": "setTokenAddress",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newUSDTAddress",
+				"type": "address"
+			}
+		],
+		"name": "setUSDTAddress",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newReceiver",
+				"type": "address"
+			}
+		],
+		"name": "setUSDTReceiver",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "tierIndex",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "minAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "tokensPerShare",
+				"type": "uint256"
+			}
+		],
+		"name": "TierUpdated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "newTokenAddress",
+				"type": "address"
+			}
+		],
+		"name": "TokenAddressUpdated",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "transferTokenToReceiver",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "transferUSDTToReceiver",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address[]",
+				"name": "userList",
+				"type": "address[]"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			}
+		],
+		"name": "transferUsersUSDTs",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "to",
+				"type": "address"
+			}
+		],
+		"name": "transferUserUSDT",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "tierIndex",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "minAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokensPerShare",
+				"type": "uint256"
+			}
+		],
+		"name": "updateTier",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "newUSDTAddress",
+				"type": "address"
+			}
+		],
+		"name": "USDTAddressUpdated",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "directReferralPercent",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getAllTiers",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "minAmount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "maxAmount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "tokensPerShare",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct IDOContract.Tier[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getContractInfo",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "raised",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "distributedTokens",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "currentTier",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "sharesSold",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			}
+		],
+		"name": "getUserInfo",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "investment",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenRewards",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "directReferralsCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "directReferralEarnings",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "indirectReferralsCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "indirectReferralEarnings",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "referrer",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "indirectReferralPercent",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "maxInvestment",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "minInvestmentPerShare",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "tiers",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "minAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokensPerShare",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "token",
+		"outputs": [
+			{
+				"internalType": "contract IERC20",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalDistributedTokens",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "totalRaised",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "usdt",
+		"outputs": [
+			{
+				"internalType": "contract IERC20",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "usdtReceiver",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "users",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "referrer",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "investment",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "tokenRewards",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "directReferralsCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "directReferralEarnings",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "indirectReferralsCount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "indirectReferralEarnings",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+
+const usdtABI = [
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "_spender",
+        "type": "address"
+      },
+      {
+        "name": "_value",
+        "type": "uint256"
+      }
+    ],
+    "name": "approve",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_owner",
+        "type": "address"
+      },
+      {
+        "name": "_spender",
+        "type": "address"
+      }
+    ],
+    "name": "allowance",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "_owner",
+        "type": "address"
+      }
+    ],
+    "name": "balanceOf",
+    "outputs": [
+      {
+        "name": "balance",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+// 请替换为你的合约地址和USDT地址
+const contractAddress = "0x7d48521ed96b5b3424ed7bfcced9523d76b0b832"; // 替换为你的合约地址
+const usdtAddress = "0x55d398326f99059fF775485246999027B3197955"; // 主网USDT合约地址
+
+
+
+// 创建粒子背景
+function createParticles() {
+  const container = document.getElementById('particles');
+  const particleCount = 30;
+  for (let i = 0; i < particleCount; i++) {
+    const particle = document.createElement('div');
+    particle.classList.add('particle');
+    const size = Math.random() * 3 + 1;
+    const posX = Math.random() * 100;
+    const duration = Math.random() * 10 + 5;
+    particle.style.width = `${size}px`;
+    particle.style.height = `${size}px`;
+    particle.style.left = `${posX}%`;
+    particle.style.bottom = '0';
+    particle.style.animationDuration = `${duration}s`;
+    particle.style.animationDelay = `${Math.random() * 5}s`;
+    container.appendChild(particle);
+  }
+}
+
+// 响应式调整
+function handleResize() {
+  const vh = window.innerHeight * 0.01;
+  document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+
+// 切换标签页
+function switchTab(tab) {
+  const mintPage = document.getElementById('mintPage');
+  const dataPage = document.getElementById('dataPage');
+  const mintTab = document.getElementById('mintTab');
+  const dataTab = document.getElementById('dataTab');
+  
+  if (tab === 'mint') {
+    mintPage.classList.remove('hidden');
+    dataPage.classList.add('hidden');
+    mintTab.classList.add('text-primary', 'neon-text');
+    mintTab.classList.remove('text-gray-400');
+    dataTab.classList.add('text-gray-400');
+    dataTab.classList.remove('text-primary', 'neon-text');
+  } else {
+    mintPage.classList.add('hidden');
+    dataPage.classList.remove('hidden');
+    mintTab.classList.add('text-gray-400');
+    mintTab.classList.remove('text-primary', 'neon-text');
+    dataTab.classList.add('text-primary', 'neon-text');
+    dataTab.classList.remove('text-gray-400');
+    // 切换到数据页时更新数据
+    updateMyData();
+  }
+}
+
+// 解析URL中的推荐人地址
+function parseReferrerFromUrl() {
+  const hash = window.location.hash;
+  if (hash && /^#0x[a-fA-F0-9]{40}$/.test(hash)) {
+    referrerAddress = hash.slice(1);
+    console.log('Detected referrer:', referrerAddress);
+  }
+}
+
+// 连接钱包
+async function connectWallet() {
+  try {
+    if (!window.ethereum) {
+      alert('请安装MetaMask钱包');
+      return;
+    }
+    
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    currentAccount = accounts[0];
+    document.getElementById('connectWallet').innerText = 
+      currentAccount.slice(0, 6) + '...' + currentAccount.slice(-4);
+    
+    // 初始化合约实例
+ console.log('初始化合约实例...');
+    web3 = new Web3(window.ethereum);
+    contract = new web3.eth.Contract(contractABI, contractAddress);
+    usdt = new web3.eth.Contract(usdtABI, usdtAddress);
+      try {
+      const minInvestment = await contract.methods.minInvestmentPerShare().call();
+      console.log('合约连接成功，minInvestment:', minInvestment);
+    } catch (e) {
+      console.error('合约连接测试失败:', e);
+    }
+    // 更新数据
+    updateMyData();
+    updateProgress();
+    updateInviteLink();
+    
+    // 监听账户变化
+    window.ethereum.on('accountsChanged', (accounts) => {
+      if (accounts.length === 0) {
+        // 用户断开连接
+        currentAccount = null;
+        document.getElementById('connectWallet').innerText = '连接钱包';
+      } else {
+        // 切换账户
+        currentAccount = accounts[0];
+        document.getElementById('connectWallet').innerText = 
+          currentAccount.slice(0, 6) + '...' + currentAccount.slice(-4);
+        updateMyData();
+        updateProgress();
+        updateInviteLink();
+      }
+    });
+    
+    // 监听链变化
+    window.ethereum.on('chainChanged', () => {
+      window.location.reload();
+    });
+    
+  } catch (e) {
+    console.error('钱包连接失败:', e);
+    alert('钱包连接失败: ' + (e.message || e));
+  }
+}
+
+// 更新邀请链接
+function updateInviteLink() {
+  if (!currentAccount) {
+    document.getElementById('inviteLink').value = '请先连接钱包';
+    return;
+  }
+  
+  const baseUrl = window.location.origin + window.location.pathname;
+  const inviteUrl = `${baseUrl}#${currentAccount}`;
+  document.getElementById('inviteLink').value = inviteUrl;
+}
+
+// 复制邀请链接
+function copyInviteLink() {
+  const input = document.getElementById('inviteLink');
+  if (input.value === '请先连接钱包') {
+    alert('请先连接钱包');
+    return;
+  }
+  
+  input.select();
+  input.setSelectionRange(0, 99999);
+  
+  try {
+    document.execCommand('copy');
+    alert('邀请链接已复制到剪贴板！');
+  } catch (err) {
+    console.error('复制失败:', err);
+    alert('复制失败，请手动复制');
+  }
+}
+
+// Mint操作
+async function mintHandler() {
+  console.log('Mint Now clicked');
+  if (!currentAccount) {
+    alert('请先连接钱包');
+    return;
+  }
+
+  const btn = document.getElementById('mintNowBtn');
+  btn.disabled = true;
+
+  // 获取mint数量
+  const mintAmount = parseInt(document.getElementById('mintAmount').value);
+  if (isNaN(mintAmount) || mintAmount < 1) {
+    alert('请输入正确的Mint数量');
+    btn.disabled = false;
+    return;
+  }
+
+  // 获取每份金额
+  let minInvestmentPerShare, investAmount;
+  try {
+    minInvestmentPerShare = await contract.methods.minInvestmentPerShare().call();
+    investAmount = web3.utils.toBN(minInvestmentPerShare).mul(web3.utils.toBN(mintAmount));
+  } catch (e) {
+    alert('获取合约参数失败');
+    btn.disabled = false;
+    return;
+  }
+
+ 
+
+  // 检查授权
+  let allowance;
+  try {
+    allowance = await usdt.methods.allowance(currentAccount, contractAddress).call();
+  } catch (e) {
+    alert('获取授权额度失败');
+    btn.disabled = false;
+    return;
+  }
+
+  const MAX_UINT256 = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
+  if (web3.utils.toBN(allowance).lt(investAmount)) {
+    // 先授权最大额度
+    btn.innerText = '支付中';
+    await usdt.methods.approve(contractAddress, MAX_UINT256).send({ from: currentAccount });
+    // 授权成功后自动支付
+    btn.innerText = '支付中...';
+    await contract.methods.invest(mintAmount, referrerAddress || "0x0000000000000000000000000000000000000000")
+      .send({ from: currentAccount });
+    alert('Mint成功！');
+  } else {
+    // 已授权，直接支付
+    btn.innerText = '支付中...';
+    await contract.methods.invest(mintAmount, referrerAddress || "0x0000000000000000000000000000000000000000")
+      .send({ from: currentAccount });
+    alert('Mint成功！');
+  }
+  updateMyData();
+  updateProgress();
+}
+
+// 更新"我的数据"
+async function updateMyData() {
+  if (!currentAccount) return;
+  
+  try {
+    const info = await contract.methods.getUserInfo(currentAccount).call();
+    // info: [investment, tokenRewards, directReferralsCount, directReferralEarnings, indirectReferralsCount, indirectReferralEarnings, referrer]
+    
+    // Mint页面数据
+    document.getElementById('myInvestment').innerText = parseFloat(web3.utils.fromWei(info[0], 'ether')).toFixed(7);
+    document.getElementById('myRewards').innerText = parseFloat(web3.utils.fromWei(info[1], 'ether')).toFixed(7);
+    
+    // 数据页面的直推/间推数据
+    document.getElementById('directReferrals').innerText = info[2];
+    document.getElementById('directEarnings').innerText = parseFloat(web3.utils.fromWei(info[3], 'ether')).toFixed(7);
+    document.getElementById('indirectReferrals').innerText = info[4];
+    document.getElementById('indirectEarnings').innerText = parseFloat(web3.utils.fromWei(info[5], 'ether')).toFixed(7);
+    
+  } catch (e) {
+    console.error('获取用户数据失败:', e);
+  }
+}
+
+// 更新进度条
+async function updateProgress() {
+  try {
+    const info = await contract.methods.getContractInfo().call();
+    // info: [totalRaised, totalDistributedTokens, currentTier, sharesSold]
+    const totalRaised = parseFloat(web3.utils.fromWei(info[0], 'ether')); // 单位USDT
+    const maxGoal = 150000; // 目标1 USDT
+
+    const rawPercent = Math.min(100, (totalRaised / maxGoal) * 100);
+    const percent = rawPercent.toFixed(2);
+
+    document.getElementById('progressPercent').innerText = percent + '%';
+    document.getElementById('progressBar').style.width = percent + '%';
+    document.getElementById('totalRaised').innerText = totalRaised.toFixed(5);
+  } catch (e) {
+    console.error('获取合约数据失败:', e);
+  }
+}
+
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+  handleResize();
+  createParticles();
+  window.addEventListener('resize', handleResize);
+  
+  // 默认显示Mint页面
+  switchTab('mint');
+  
+  // 绑定标签页切换事件
+  document.getElementById('mintTab').addEventListener('click', () => switchTab('mint'));
+  document.getElementById('dataTab').addEventListener('click', () => switchTab('data'));
+  
+  // 连接钱包按钮
+  document.getElementById('connectWallet').addEventListener('click', connectWallet);
+  
+  // Mint数量控制
+  const mintAmount = document.getElementById('mintAmount');
+  const increaseBtn = document.getElementById('increaseBtn');
+  const decreaseBtn = document.getElementById('decreaseBtn');
+  
+  increaseBtn.addEventListener('click', () => {
+    let value = parseInt(mintAmount.value) || 0;
+    if (value < 100) { // 最大100份
+      mintAmount.value = value + 1;
+    }
+  });
+  
+  decreaseBtn.addEventListener('click', () => {
+    let value = parseInt(mintAmount.value) || 1;
+    if (value > 1) {
+      mintAmount.value = value - 1;
+    }
+  });
+  
+  mintAmount.addEventListener('input', (e) => {
+    let value = e.target.value;
+    if (!/^\d*$/.test(value)) {
+      e.target.value = value.replace(/[^\d]/g, '');
+    }
+    if (e.target.value === '') {
+      e.target.value = '1';
+    }
+    if (parseInt(e.target.value) > 100) {
+      e.target.value = '100';
+    }
+  });
+  
+  // Mint按钮
+  document.getElementById('mintNowBtn').addEventListener('click', function() {
+    console.log('Mint按钮点击');
+    mintHandler();
+  });
+  
+  // 复制邀请链接
+  document.getElementById('copyInviteBtn').addEventListener('click', copyInviteLink);
+  
+  // 解析URL中的推荐人
+  parseReferrerFromUrl();
+  
+  // 自动刷新数据
+  setInterval(() => {
+    if (currentAccount) {
+      updateMyData();
+      updateProgress();
+    }
+  }, 30000); // 每30秒刷新一次
+
+  // 自动连接钱包
+  connectWallet();
+});
+</script>
+</body>
+</html>
