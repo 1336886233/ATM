@@ -102,13 +102,6 @@ tailwind.config = {
 <main class="pt-20 pb-24 px-4 flex-1" style="height: calc(100vh - 120px); overflow-y: auto;">
   <!-- Mint 页面 -->
   <div id="mintPage" class="space-y-6 pb-8">
-    <!-- 旋转Logo -->
-    <div class="flex justify-center">
-      <div class="w-32 h-32 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center animate-spin-slow neon-border">
-        <img src="https://ai-public.mastergo.com/ai/img_res/82a0b2c61388354358113dcdcb4475cc.jpg"
-             alt="Logo" class="w-24 h-24 object-contain animate-float">
-      </div>
-    </div>
     <!-- Mint数量控制 -->
     <div class="glass-card p-6 rounded-xl">
       <h2 class="text-xl font-semibold mb-4 neon-text">Mint 数量</h2>
@@ -123,6 +116,12 @@ tailwind.config = {
       </div>
       <div class="mt-4 text-center text-sm text-gray-400">
         Mint 金额范围: 10 USDT - 1000 USDT
+      </div>
+      <div class="mt-2 text-center text-sm text-gray-400">
+        Mint分三阶段：
+        第一阶段(0-5万)：10U 10枚
+        第二阶段(5-10万)：10U 9.5枚
+        第三阶段(10-15万)：10U 9枚
       </div>
     </div>
     <!-- Mint按钮 -->
@@ -151,8 +150,8 @@ tailwind.config = {
           <span id="myInvestment" class="text-neon font-mono">0</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-gray-300">我的 Mint 奖励</span>
-          <span id="myRewards" class="text-neon font-mono">0</span>
+          <span class="text-gray-300">当前阶段每份奖励</span>
+          <span id="myRewards" class="text-neon font-mono">0 枚</span>
         </div>
       </div>
     </div>
@@ -164,10 +163,6 @@ tailwind.config = {
         <button id="copyInviteBtn" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-button neon-border">
           <i class="fas fa-copy"></i>
         </button>
-      </div>
-      <div class="mt-4 flex justify-center">
-        <img src="https://ai-public.mastergo.com/ai/img_res/5868382d79091cdb532aa5c2692749af.jpg"
-             alt="QR Code" class="w-32 h-32 object-contain">
       </div>
     </div>
   </div>
@@ -1217,8 +1212,8 @@ async function mintHandler() {
   btn.disabled = true;
 
   // 获取mint数量
-  const mintAmount = parseInt(document.getElementById('mintAmount').value);
-  if (isNaN(mintAmount) || mintAmount < 1) {
+  const mintAmount = parseInt(document.getElementById('mintAmount').value) || 0;
+  if (mintAmount < 1) {
     alert('请输入正确的Mint数量');
     btn.disabled = false;
     return;
@@ -1273,18 +1268,38 @@ async function updateMyData() {
   if (!currentAccount) return;
   
   try {
-    const info = await contract.methods.getUserInfo(currentAccount).call();
-    // info: [investment, tokenRewards, directReferralsCount, directReferralEarnings, indirectReferralsCount, indirectReferralEarnings, referrer]
+    // 获取合约信息
+    const info = await contract.methods.getContractInfo().call();
+    const totalRaised = parseFloat(web3.utils.fromWei(info[0], 'ether')); // 总募资额(USDT)
     
-    // Mint页面数据
-    document.getElementById('myInvestment').innerText = parseFloat(web3.utils.fromWei(info[0], 'ether')).toFixed(7);
-    document.getElementById('myRewards').innerText = parseFloat(web3.utils.fromWei(info[1], 'ether')).toFixed(7);
+    // 根据总募资额确定当前阶段和每份奖励
+    let currentTier, tokensPerShare;
+    if (totalRaised < 50000) {
+      currentTier = 1;
+      tokensPerShare = 10; // 第一阶段：0-5万U，每份10枚
+    } else if (totalRaised < 100000) {
+      currentTier = 2;
+      tokensPerShare = 9.5; // 第二阶段：5-10万U，每份9.5枚
+    } else if (totalRaised < 150000) {
+      currentTier = 3;
+      tokensPerShare = 9; // 第三阶段：10-15万U，每份9枚
+    } else {
+      currentTier = 4;
+      tokensPerShare = 0; // 超过15万U，结束
+    }
+    
+    // 更新显示
+    document.getElementById('myRewards').innerText = `第${currentTier}阶段 ${tokensPerShare.toFixed(1)} 枚`;
+    
+    // 获取用户信息
+    const userInfo = await contract.methods.getUserInfo(currentAccount).call();
+    document.getElementById('myInvestment').innerText = parseFloat(web3.utils.fromWei(userInfo[0], 'ether')).toFixed(7);
     
     // 数据页面的直推/间推数据
-    document.getElementById('directReferrals').innerText = info[2];
-    document.getElementById('directEarnings').innerText = parseFloat(web3.utils.fromWei(info[3], 'ether')).toFixed(7);
-    document.getElementById('indirectReferrals').innerText = info[4];
-    document.getElementById('indirectEarnings').innerText = parseFloat(web3.utils.fromWei(info[5], 'ether')).toFixed(7);
+    document.getElementById('directReferrals').innerText = userInfo[2];
+    document.getElementById('directEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[3], 'ether')).toFixed(7);
+    document.getElementById('indirectReferrals').innerText = userInfo[4];
+    document.getElementById('indirectEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[5], 'ether')).toFixed(7);
     
   } catch (e) {
     console.error('获取用户数据失败:', e);
@@ -1347,12 +1362,11 @@ document.addEventListener('DOMContentLoaded', () => {
   
   mintAmount.addEventListener('input', (e) => {
     let value = e.target.value;
+    // 只允许输入数字
     if (!/^\d*$/.test(value)) {
       e.target.value = value.replace(/[^\d]/g, '');
     }
-    if (e.target.value === '') {
-      e.target.value = '1';
-    }
+    // 限制最大值为100
     if (parseInt(e.target.value) > 100) {
       e.target.value = '100';
     }
