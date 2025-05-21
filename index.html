@@ -1300,11 +1300,11 @@ async function updateMyData() {
     const userInfo = await contract.methods.getUserInfo(currentAccount).call();
     document.getElementById('myInvestment').innerText = parseFloat(web3.utils.fromWei(userInfo[0], 'ether')).toFixed(7);
     
-    // 数据页面的直推/间推数据
-    document.getElementById('directReferrals').innerText = userInfo[2];
-    document.getElementById('directEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[3], 'ether')).toFixed(7);
+     // 数据页面的直推/间推数据
+	 document.getElementById('directReferrals').innerText = userInfo[2];
+    document.getElementById('directEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[3], 'ether')).toFixed(2) + ' USDT';
     document.getElementById('indirectReferrals').innerText = userInfo[4];
-    document.getElementById('indirectEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[5], 'ether')).toFixed(7);
+    document.getElementById('indirectEarnings').innerText = parseFloat(web3.utils.fromWei(userInfo[5], 'ether')).toFixed(2) + ' USDT';
     
   } catch (e) {
     console.error('获取用户数据失败:', e);
